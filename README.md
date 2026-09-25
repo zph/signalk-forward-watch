@@ -55,7 +55,7 @@ Restart Signal K and enable the plugin in **Admin → Plugin Config → Forward 
 | **Camera Username** | `admin` | RTSP/ONVIF login username |
 | **Camera Password** | — | RTSP/ONVIF login password |
 | **RTSP URL** | auto | Full RTSP stream URL. If left blank, the plugin runs ONVIF discovery using the IP/user/pass above. Enter manually to skip discovery: `rtsp://user:pass@ip:554/stream1`. If the URL has no embedded credentials, the Camera Username and Camera Password fields are applied automatically. |
-| **Detection interval (seconds)** | `300` | How often to grab a frame and run detection. There is no configured minimum; `0` runs as fast as inference completes. Lower intervals use more CPU. The plugin skips overlapping detection cycles. |
+| **Detection interval (seconds)** | `60` | How often to grab a frame and run detection. There is no configured minimum; `0` runs as fast as inference completes. Lower intervals use more CPU. The plugin skips overlapping detection cycles. |
 | **FFmpeg execution mode** | `local` | `local` uses ffmpeg installed in the Signal K environment. `container` runs a persistent FFmpeg sidecar through `signalk-container`. |
 | **FFmpeg container image** | `lscr.io/linuxserver/ffmpeg` | Container image used when FFmpeg execution mode is `container`. Advanced users may include a tag, for example `lscr.io/linuxserver/ffmpeg:version-6.1-cli`; when no tag is specified, `latest` is used. |
 | **Alert cooldown (seconds)** | `30` | Minimum time between repeat alerts for the same target type and quadrant. Prevents alarm flooding. |
@@ -217,11 +217,11 @@ A Signal K notification is sent for any detection **within 100m**. One notificat
 
 | Hardware | Inference time | Recommended interval |
 |----------|---------------|----------------------|
-| Raspberry Pi 4 (4GB) | ~1.6s | 300s (v0.1.x) · 60s (v0.2.0+) |
+| Raspberry Pi 4 (4GB) | ~1.6s | 60s (default; v0.2.0+) |
 | Raspberry Pi 5 | ~0.6s (estimated) | 60s |
 | x86 CPU (modern) | ~0.3s | 10s |
 
-> **v0.1.x note:** ONNX inference runs on the Signal K event loop thread. At short intervals this can cause GPS, AIS, and engine data to freeze during inference. The default interval of 300s avoids this. v0.2.0 moves inference to a worker thread — GPS/AIS/engine data will remain live at any detection interval.
+> **v0.1.x note:** ONNX inference runs on the Signal K event loop thread. At short intervals this can cause GPS, AIS, and engine data to freeze during inference. v0.2.0 moves inference to a worker thread — GPS/AIS/engine data remain live at any detection interval.
 
 ---
 
@@ -239,7 +239,7 @@ A Signal K notification is sent for any detection **within 100m**. One notificat
 - If Signal K itself runs in a container, verify the `signalk-container` deployment doctor reports `ok` and can resolve the Signal K container/config root.
 
 **High CPU usage**
-- Increase the detection interval. Default is 300s; v0.2.0+ worker thread allows 60s on Pi 4 without impacting Signal K performance.
+- Increase the detection interval. Default is 60s; lower values are allowed, and the worker thread keeps Signal K responsive while inference runs.
 - The plugin guards against overlapping inference cycles — if one cycle takes longer than the interval, the next is skipped.
 
 **Distance estimates seem wrong**
