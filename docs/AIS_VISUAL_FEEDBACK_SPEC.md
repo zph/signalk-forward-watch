@@ -12,6 +12,7 @@
 5. Improve velocity and closest-point-of-approach (CPA) / time-to-CPA (TCPA) estimates without presenting a camera-only guess as an AIS fact.
 6. Keep image capture, storage, export, training, and model activation bounded and operator-controlled.
 7. Accept event images from cameras that cannot provide continuous RTSP, preserve any camera-supplied tags, and make human review available in a browser.
+8. Run a bounded, local visual first pass on captured stills so human reviewers start with boxes, a short scene summary, and reasons to inspect the image.
 
 ## 2. Non-goals and safety boundary
 
@@ -20,6 +21,7 @@
 - Vessel dimensions and reported position references can be absent or wrong. AIS length is a weak size prior, not a substitute for a visible box.
 - Camera-only monocular distance, heading, velocity, CPA, or TCPA must not be presented as precise navigation data.
 - A camera's motion or object tag is a suggestion about why an image was captured; it is not a marine detection label or an AIS identity.
+- A vision-language model's description, object box, or negative result is a suggestion, not a reviewed label, AIS identity, measured range, or reason to suppress a safety alert.
 - The plugin must not train, quantize, or replace its live model automatically on a Signal K host. A new model is a separately versioned, tested artifact and requires explicit activation.
 - Forward Watch output must remain distinguishable from received AIS. Synthetic visual detections must never be written or relayed as real AIS reports.
 
@@ -150,6 +152,8 @@ Use **self-hosted Label Studio Community Edition** for the first still-image rev
 
 The project labeling configuration is [label-studio/label-config.xml](label-studio/label-config.xml), with a representative [import task](label-studio/example-task.json). It shows the image, camera event description, and AIS candidate summary; lets the reviewer correct boxes/classes; and requires an explicit frame status and `accept`/`hold` decision. For each selected box, dynamic choices offer the candidate MMSIs plus `none`, `uncertain`, and `not listed`. The current six detector classes retain their exact names; `other_obstacle` is review-only until a later model version deliberately expands the class map. An `other_obstacle`-only image must not be silently exported as a clear negative for the current detector.
 
+The interface also shows a concise first-pass visual summary, its model identity, and review-priority reasons. Keep the live detector and first-pass boxes in separate `predictions` entries with distinct `model_version` values so the reviewer can inspect their disagreement. The text summary is task data, never a substitute for opening the full-resolution image.
+
 Forward Watch sends one Label Studio task per unique capture, with a local-file image reference, immutable capture ID, camera tags as data, AIS candidates as dynamic choices, and model boxes under `predictions`. The current detector's normalized center/width/height coordinates must be converted to Label Studio's top-left percentage boxes against the original image dimensions. Suggestions are displayed as predictions; they are not accepted annotations. If several vessels appear, each reviewed box gets its own AIS choice. The AIS options are display suggestions only; the exported value is a stable `ais:<MMSI>` token or a fixed non-match token. Escape camera/AIS names before using any formatted display text. Retain trip ID and capture time so the reviewer can inspect neighboring stills in order; each frame's AIS identity still requires its own decision.
 
 Use Label Studio's task import API in bounded batches, with a durable mapping from `capture_id` to Label Studio task ID and retries that do not create duplicates. Annotation webhooks can prompt a quick refresh, but a periodic API reconciliation is required because Label Studio does not retry failed webhooks. An update to a reviewed annotation creates a new local review revision; the original capture and earlier review remain auditable. The API token belongs in server-side configuration and never in a task, URL, browser page, or exported dataset.
@@ -169,10 +173,24 @@ Label Studio Community Edition supports annotation but does not provide a separa
 
 The plugin must start and detect normally without Label Studio. If the annotation server is offline, persist pending tasks locally and sync them when it returns. Do not copy an entire image library into Label Studio's uploaded-media store: serve images from the bounded local archive through a narrowly mounted local-files root and import task references plus suggestions. Camera ingress, Label Studio sync, and training export must have separate enable switches and quotas. Images stay on the camera-side server; transferring them to a home server or training machine requires a deliberate export on an appropriate connection.
 
+### Automated first review pass
+
+Start by evaluating [Microsoft Florence-2-base](https://huggingface.co/microsoft/Florence-2-base) as an **optional, asynchronous** local reviewer. Its 0.23B-parameter model supports object detection and region captioning, giving a useful trial of boxes plus a brief scene description without a multi-billion-parameter general-purpose VLM. This is a candidate, not a claim that it recognizes small marine targets reliably or runs acceptably on the boat's Raspberry Pi 4. Benchmark it on the intended inference host and held-out boat images before enabling it. Run the existing Forward Watch detector in the live path; Florence operates only on archived, selected stills and never gates alerts, AIS association, or capture.
+
+The worker should use the model's structured object-detection output for box suggestions. A caption can explain a scene or flag possible glare/occlusion, but cannot create a box or a `clear_negative` label by itself. Map detector phrases to the six current classes through a versioned, conservative synonym table; preserve raw phrases. An unknown or ambiguous phrase stays `other_obstacle` or unclassified for review. Reject malformed/out-of-image boxes and record any resizing and coordinate transformation back to the original image. Do not turn a generated vessel description into an MMSI, ship dimensions, range, or heading. AIS candidates remain geometric suggestions from section 4.
+
+Queue a bounded set of stills from camera events, low-confidence or conflicting detector results, AIS-in-view images with no detection, and a randomized sample of otherwise empty frames. Do not let an AI `nothing visible` response remove an image from the human queue: those misses are particularly valuable. Prioritize model disagreement, AIS-in-view misses, small/distant boxes, unfamiliar camera tags, and poor image quality. Rate-limit repeated frames and keep a small random audit sample across all triage outcomes so selection bias and missed targets can be measured. Reviewers should see the priority reason, original camera tag, live-detector output, first-pass output, and AIS context separately.
+
+Persist each run as append-only provenance: capture checksum, model repository/revision and artifact checksum, processor/runtime version, task prompts and decoding settings, class-map version, output boxes/raw text, duration, outcome (`completed`, `timed_out`, `failed`, `skipped`), and skip/failure reason. A result arriving after a human annotation must not overwrite it. Label Studio receives distinct prediction versions; the export pipeline reads accepted human annotations only. Prediction scores, if emitted, are model-specific ranking hints, not calibrated probabilities or proof of agreement.
+
+Run the worker outside the Signal K event loop with explicit queue depth, concurrency, memory and CPU limits, and a timeout per image. If it is unavailable or too slow, import the image for human review with `AI review unavailable` and continue. Keep images and inference local to the capture host or its LAN; remote inference is opt-in and never sends images over the metered connection by default. Download pinned model revisions on the inference host only when the recorded artifact checksum differs; do not transfer model weights or image batches from the development laptop by SSH/SCP. The Coral Edge TPU, if fitted, is for a compatible quantized detector; it does not accelerate Florence's transformer workload.
+
+Promotion criterion: on held-out outings, compare the live detector alone with the detector plus first-pass review. Report small/distant target recall, the share of false negatives that still reach human review, false suggestions per image, median/P95 reviewer time, and P95 worker latency, RAM, and power on the chosen host. Include glare, wakes, night/twilight, rain, buoys, debris, and empty water. Keep the worker optional unless the measured review benefit justifies its resource cost. A larger vision-language model or an open-vocabulary detector can be tried on a capable local home server as a second experiment, using the same interface and test set; do not assume that a more fluent caption yields better boxes.
+
 ## 8. Review and training workflow
 
 1. **Collect:** local, bounded capture records; no model changes.
-2. **Prioritize:** queue detector misses, false positives, ambiguous AIS matches, small/distant targets, and conditions underrepresented in the dataset.
+2. **Pre-review and prioritize:** run the optional bounded visual first pass, then queue detector misses, model disagreements, false positives, ambiguous AIS matches, small/distant targets, and conditions underrepresented in the dataset. Keep a random audit sample and expose failures rather than hiding them.
 3. **Review:** operator uses the browser queue to confirm/edit boxes, classes, camera tags, AIS identity, and optional visibility/occlusion tags. Preserve disagreements and provenance. `accept` is required for training inclusion.
 4. **Freeze a dataset version:** immutable manifest, split assignment, label audit, and checksums.
 5. **Train off the live Signal K loop:** fine-tune the selected detector on a controlled training host. Use a pretrained baseline and include representative negatives. Split by whole trip/session/camera period, not random adjacent frames, to avoid leakage.
@@ -200,6 +218,7 @@ Required configuration controls:
 - Camera field-of-view/calibration and yaw offset.
 - Capture/review storage on/off, quota, retention, and sampling rate.
 - Camera image ingress adapter/drop directory, accepted formats/size limits, and Label Studio server/project connection on/off.
+- Optional first-pass visual reviewer on/off, pinned model revision/checksum, inference host, queue and resource limits, sampling policy, and failure status.
 - Detector backend selection (`cpu-onnx` or `coral-edgetpu`), artifact path/version, and explicit CPU fallback policy.
 - Confirmation policy and ambiguity margin.
 - Track gap timeout and CPA prediction horizon.
@@ -221,12 +240,13 @@ Before enabling AIS-assisted training or CPA output:
 8. Camera-ingress tests cover partial uploads, duplicate/retried events, malformed files, missing tags, untrusted filenames, time uncertainty, and a full storage queue.
 9. Web-review tests cover image-only and prediction-backed tasks, multiple boxes with distinct AIS choices, accepted clear negatives, held/unusable images, edited annotations, Label Studio outages, failed webhook delivery, and reconciliation without duplicate tasks.
 10. A Coral candidate is verified on the boat Pi: the Edge TPU runtime is selected, compiler placement is recorded, quantized accuracy is evaluated on held-out marine images, and end-to-end latency is measured. CPU fallback remains observable and the Signal K event loop remains responsive if Coral initialization or inference fails.
+11. First-pass review tests cover structured box conversion, unknown phrases, prompt/model provenance, model disagreement, late predictions, bounded queues, timeouts, and offline worker behavior; replay confirms a negative AI result never hides an AIS-in-view miss. Held-out review trials measure whether human time falls without losing small-target review coverage.
 
 ## 11. Delivery phases
 
 **Phase A — calibrated AIS overlay:** read Signal K AIS/self data, record image timestamp, project AIS bearings into the calibrated image, display match candidates, and log no images by default.
 
-**Phase B — camera ingress and local review queue:** bounded image plus metadata capture from RTSP, camera event uploads, or manual import, including AIS-in-view misses; connect Label Studio for browser box/class/AIS review and immutable export. The Label Studio connection is optional and retry-safe.
+**Phase B — camera ingress and local review queue:** bounded image plus metadata capture from RTSP, camera event uploads, or manual import, including AIS-in-view misses; connect Label Studio for browser box/class/AIS review and immutable export. Add the optional, measured first-pass visual worker after basic ingestion and human review work; Label Studio and the worker are independently optional and retry-safe.
 
 **Phase C — persistent tracks and kinematics:** repeated-frame visual IDs, confirmed MMSI links, smoothed target motion, and uncertainty-aware CPA/TCPA in a shadow display.
 
@@ -240,3 +260,4 @@ Each phase should be useful and testable on its own. Phase C must not depend on 
 - [CVAT manual review](https://docs.cvat.ai/docs/qa-analytics/manual-qa/) and [job stages](https://docs.cvat.ai/docs/manual/basics/vocabulary/).
 - [Reolink FTP support by model/hardware](https://support.reolink.com/articles/900000625446-Which-Cameras-NVRs-Support-FTP-Uploading/), [FTP event schedule behavior](https://support.reolink.com/hc/en-us/articles/360020081034-How-to-Set-/), and [smart detection categories](https://support.reolink.com/articles/900002812826-Introduction-to-Reolink-Smart-Detection/).
 - [Ultralytics Edge TPU export guide](https://docs.ultralytics.com/integrations/edge-tpu), [Coral on Raspberry Pi deployment guide](https://docs.ultralytics.com/guides/coral-edge-tpu-on-raspberry-pi), and [Coral Edge TPU compiler documentation](https://coral.ai/docs/edgetpu/compiler/).
+- [Microsoft Florence-2-base model card and object-detection examples](https://huggingface.co/microsoft/Florence-2-base), [Label Studio prediction import and model versions](https://labelstud.io/guide/predictions), and [Label Studio prediction API](https://api.labelstud.io/api-reference/api-reference/predictions/list).

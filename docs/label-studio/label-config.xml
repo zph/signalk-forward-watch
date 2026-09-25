@@ -3,6 +3,8 @@
   <Text name="capture_summary" value="$capture_summary"/>
   <Text name="camera_event_summary" value="$camera_event_summary"/>
   <Text name="ais_candidate_summary" value="$ais_candidate_summary"/>
+  <Text name="ai_review_summary" value="$ai_review_summary"/>
+  <Text name="review_priority_summary" value="$review_priority_summary"/>
 
   <Image name="image" value="$image" zoomControl="true"/>
   <RectangleLabels name="objects" toName="image">

@@ -6,6 +6,8 @@
       "capture_summary": "Camera 1; 2026-09-24 12:00:00 UTC; image age 4 s",
       "camera_event_summary": "Camera tag: vehicle (camera event; unverified)",
       "ais_candidate_summary": "123456789 EXAMPLE VESSEL: 340 m, 2° bearing difference, AIS age 3 s",
+      "ai_review_summary": "Florence-2-base, pinned example revision: suggests one ship; scene description suggests glare near the horizon. Unreviewed; inspect the image.",
+      "review_priority_summary": "High: live detector and first-pass model disagree on class; small distant box. Review both prediction versions.",
       "ais_options": [
         { "value": "ais:123456789", "html": "123456789 EXAMPLE VESSEL — 340 m, 3 s old" },
         { "value": "none", "html": "No matching AIS vessel" },
@@ -33,6 +35,28 @@
               "width": 20,
               "height": 15,
               "rectanglelabels": ["boat"]
+            }
+          }
+        ]
+      },
+      {
+        "model_version": "florence-2-base-revision-example",
+        "result": [
+          {
+            "id": "ai-det-1",
+            "type": "rectanglelabels",
+            "from_name": "objects",
+            "to_name": "image",
+            "original_width": 1920,
+            "original_height": 1080,
+            "image_rotation": 0,
+            "value": {
+              "rotation": 0,
+              "x": 41,
+              "y": 44,
+              "width": 19,
+              "height": 16,
+              "rectanglelabels": ["ship"]
             }
           }
         ]
