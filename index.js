@@ -41,7 +41,6 @@ module.exports = function(app) {
           type: 'number',
           title: 'Detection interval in seconds',
           default: 300,
-          minimum: 10,
           maximum: 600
         },
         ffmpeg_mode: {
@@ -125,7 +124,8 @@ module.exports = function(app) {
         await this.grabber.start(this.rtspUrl);
       }
 
-      app.debug(`Starting detection loop every ${options.detection_interval}s`);
+      const detectionInterval = options.detection_interval ?? 300;
+      app.debug(`Starting detection loop every ${detectionInterval}s`);
       if (app.setPluginStatus) {
         const mode = options.ffmpeg_mode === 'container' ? 'container FFmpeg' : 'local FFmpeg';
         app.setPluginStatus(`Running with ${mode}`);
@@ -167,7 +167,7 @@ module.exports = function(app) {
         }
       };
 
-      this.interval = setInterval(detectOnce, (options.detection_interval || 300) * 1000);
+      this.interval = setInterval(detectOnce, detectionInterval * 1000);
       detectOnce();
     },
 

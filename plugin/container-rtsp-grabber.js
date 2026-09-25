@@ -13,7 +13,7 @@ class ContainerRtspGrabber {
     this.containers = null;
     this.frameDir = path.join(app.getDataDirPath(), 'frames');
     this.framePath = path.join(this.frameDir, FRAME_FILE);
-    this.frameMaxAgeMs = Math.max((this.options.detection_interval || 1) * 3000, 10000);
+    this.frameMaxAgeMs = Math.max((this.options.detection_interval ?? 1) * 3000, 10000);
     this.started = false;
     this.stopped = false;
     this.rtspUrl = null;
@@ -43,7 +43,8 @@ class ContainerRtspGrabber {
   async startContainer() {
     const mount = await this.resolveFrameMount();
     const { image, tag } = resolveImageAndTag(this.options.ffmpeg_container_image);
-    const frameEvery = Math.max(1, this.options.detection_interval || 1);
+    const frameEvery = this.options.detection_interval ?? 1;
+    const frameRateArgs = frameEvery > 0 ? ['-vf', `fps=1/${frameEvery}`] : [];
 
     await this.containers.ensureRunning(
       CONTAINER_NAME,
@@ -67,8 +68,7 @@ class ContainerRtspGrabber {
           '-i',
           this.rtspUrl,
           '-an',
-          '-vf',
-          `fps=1/${frameEvery}`,
+          ...frameRateArgs,
           '-q:v',
           '2',
           '-update',

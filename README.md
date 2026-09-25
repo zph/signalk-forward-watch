@@ -55,7 +55,7 @@ Restart Signal K and enable the plugin in **Admin → Plugin Config → Forward 
 | **Camera Username** | `admin` | RTSP/ONVIF login username |
 | **Camera Password** | — | RTSP/ONVIF login password |
 | **RTSP URL** | auto | Full RTSP stream URL. If left blank, the plugin runs ONVIF discovery using the IP/user/pass above. Enter manually to skip discovery: `rtsp://user:pass@ip:554/stream1`. If the URL has no embedded credentials, the Camera Username and Camera Password fields are applied automatically. |
-| **Detection interval (seconds)** | `300` | How often to grab a frame and run detection. Lower = more CPU. Default 300s is conservative; v0.2.0+ worker thread allows 60s on Raspberry Pi 4 without impacting Signal K. |
+| **Detection interval (seconds)** | `300` | How often to grab a frame and run detection. There is no configured minimum; `0` runs as fast as inference completes. Lower intervals use more CPU. The plugin skips overlapping detection cycles. |
 | **FFmpeg execution mode** | `local` | `local` uses ffmpeg installed in the Signal K environment. `container` runs a persistent FFmpeg sidecar through `signalk-container`. |
 | **FFmpeg container image** | `lscr.io/linuxserver/ffmpeg` | Container image used when FFmpeg execution mode is `container`. Advanced users may include a tag, for example `lscr.io/linuxserver/ffmpeg:version-6.1-cli`; when no tag is specified, `latest` is used. |
 | **Alert cooldown (seconds)** | `30` | Minimum time between repeat alerts for the same target type and quadrant. Prevents alarm flooding. |
