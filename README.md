@@ -13,7 +13,7 @@ AI-powered forward watch obstacle detection for Signal K. Monitors a bow-mounted
 - A bow-mounted IP camera with RTSP stream (ONVIF cameras auto-discovered)
 - ffmpeg available through one of these modes:
   - local mode: ffmpeg installed beside Signal K (`sudo apt install ffmpeg`)
-  - container mode: [`signalk-container`](https://github.com/dirkwa/signalk-container) installed and configured with Docker or Podman access
+  - container mode: [`signalk-container`](https://github.com/dirkwa/signalk-container) 1.6.0 or later, installed and configured with Docker or Podman access
 - Raspberry Pi 4 or better (CPU inference, no GPU required)
 
 ---
@@ -69,7 +69,7 @@ Container mode is intended for Signal K deployments where the server itself runs
 
 Forward Watch starts one persistent managed container named `sk-forward-watch-ffmpeg`. It runs ffmpeg for the lifetime of the plugin, writes the latest RTSP frame to the plugin data directory, and is stopped when the plugin is disabled. The container is not recreated for every frame.
 
-The container gets access to the Signal K config root via `signalkConfigRootMount`, then writes to Forward Watch's own `plugin-config-data/signalk-forward-watch/frames/latest.jpg` path. This keeps the frame file visible to the detector whether Signal K is running bare-metal or inside a container.
+The container gets access only to Forward Watch's plugin data directory via `signalkDataMount`, then writes to its `frames/latest.jpg` path. This keeps the frame file visible to the detector whether Signal K is running bare-metal or inside a container, without exposing the rest of the Signal K configuration.
 
 If the container keeps running but stops updating `latest.jpg`, Forward Watch treats the frame as stale and restarts the managed FFmpeg container. This handles RTSP sessions that remain alive at Docker level while ffmpeg is no longer producing fresh JPEGs.
 

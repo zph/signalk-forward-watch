@@ -2,7 +2,7 @@ const fs = require('fs');
 const path = require('path');
 
 const CONTAINER_NAME = 'forward-watch-ffmpeg';
-const CONFIG_ROOT_MOUNT = '/signalk-config';
+const DATA_MOUNT = '/signalk-data';
 const FRAME_FILE = 'latest.jpg';
 const PLUGIN_VERSION = require('../package.json').version;
 
@@ -81,26 +81,26 @@ class ContainerRtspGrabber {
       {
         pluginId: 'signalk-forward-watch',
         pluginVersion: PLUGIN_VERSION,
-        onContainerLog: (line) => this.app.debug(`[ffmpeg-container] ${line}`),
+        onContainerLog: (line) => this.app.debug(`[ffmpeg-container] ${redactRtspCredentials(line)}`),
         onContainerLogStartTail: 25
       }
     );
   }
 
   async resolveFrameMount() {
-    const configPath = this.app.config && this.app.config.configPath;
-    if (!configPath) {
-      throw new Error('Signal K config root is unavailable; container FFmpeg mode requires app.config.configPath');
+    const dataPath = this.app.getDataDirPath();
+    if (!dataPath) {
+      throw new Error('Signal K plugin data directory is unavailable; container FFmpeg mode requires app.getDataDirPath()');
     }
 
-    const relativeFramePath = path.relative(configPath, this.framePath);
+    const relativeFramePath = path.relative(dataPath, this.framePath);
     if (!relativeFramePath || relativeFramePath.startsWith('..') || path.isAbsolute(relativeFramePath)) {
-      throw new Error(`Forward Watch frame path is outside the Signal K config root: ${this.framePath}`);
+      throw new Error(`Forward Watch frame path is outside its plugin data directory: ${this.framePath}`);
     }
 
     return {
-      config: { signalkConfigRootMount: CONFIG_ROOT_MOUNT },
-      containerFramePath: path.posix.join(CONFIG_ROOT_MOUNT, toPosix(relativeFramePath))
+      config: { signalkDataMount: DATA_MOUNT },
+      containerFramePath: path.posix.join(DATA_MOUNT, toPosix(relativeFramePath))
     };
   }
 
@@ -178,6 +178,10 @@ function resolveImageAndTag(imageValue) {
   }
 
   return { image, tag };
+}
+
+function redactRtspCredentials(value) {
+  return String(value).replace(/(rtsps?:\/\/)[^\s/@]+(?::[^\s/@]*)?@/gi, '$1***@');
 }
 
 module.exports = ContainerRtspGrabber;

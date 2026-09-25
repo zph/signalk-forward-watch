@@ -207,7 +207,10 @@ function redactRtspUrl(rtspUrl) {
 
   try {
     const parsed = new URL(rtspUrl);
-    if (parsed.password) parsed.password = '***';
+    if (parsed.username || parsed.password) {
+      parsed.username = '***';
+      parsed.password = '***';
+    }
     return parsed.toString();
   } catch (err) {
     return rtspUrl;
