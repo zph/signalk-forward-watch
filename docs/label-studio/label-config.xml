@@ -1,0 +1,39 @@
+<View>
+  <Header value="Forward Watch image review"/>
+  <Text name="capture_summary" value="$capture_summary"/>
+  <Text name="camera_event_summary" value="$camera_event_summary"/>
+  <Text name="ais_candidate_summary" value="$ais_candidate_summary"/>
+
+  <Image name="image" value="$image" zoomControl="true"/>
+  <RectangleLabels name="objects" toName="image">
+    <Label value="ship" background="#1f77b4"/>
+    <Label value="boat" background="#17becf"/>
+    <Label value="debris" background="#ff7f0e"/>
+    <Label value="buoy" background="#9467bd"/>
+    <Label value="kayak" background="#2ca02c"/>
+    <Label value="log" background="#8c564b"/>
+    <Label value="other_obstacle" background="#7f7f7f"/>
+  </RectangleLabels>
+
+  <View visibleWhen="region-selected">
+    <Header value="AIS identity for the selected box"/>
+    <Choices name="ais_identity" toName="image" perRegion="true"
+             choice="single-radio" value="$ais_options" required="true"/>
+  </View>
+
+  <Header value="Frame review"/>
+  <Choices name="frame_status" toName="image" choice="single-radio" required="true">
+    <Choice value="targets_visible"/>
+    <Choice value="clear_negative"/>
+    <Choice value="unusable"/>
+  </Choices>
+  <Choices name="camera_tag_review" toName="image" choice="single-radio" required="true">
+    <Choice value="plausible"/>
+    <Choice value="wrong"/>
+    <Choice value="unknown_or_missing"/>
+  </Choices>
+  <Choices name="review_decision" toName="image" choice="single-radio" required="true">
+    <Choice value="accept"/>
+    <Choice value="hold"/>
+  </Choices>
+</View>
